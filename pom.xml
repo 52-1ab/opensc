@@ -27,11 +27,6 @@
             <version>1.10.2</version>
             <scope>test</scope>
         </dependency>
-        <!-- Plain Maven Central releases, not phonepe-harness's vendored/patched
-             0.9.10-SNAPSHOT: those patches (prctl PR_SET_DUMPABLE, unresolved-
-             symbol hook fallback) exist for MoneyView's hostile anti-debug
-             behavior, which libSecureComponent.so and RealLibraryTest's bare
-             JNI bridge never touch. -->
         <dependency>
             <groupId>com.github.zhkl0228</groupId>
             <artifactId>unidbg-android</artifactId>
