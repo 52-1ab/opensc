@@ -2,10 +2,7 @@ package org.npci.upi.security.pinactivitycomponent;
 
 import java.security.PublicKey;
 
-// Mirrors the real class name/package exactly: RegisterNatives binds by this
-// descriptor, so JNI_OnLoad's FindClass(CLS) only succeeds if this matches.
-// nTestUtf8/nTestGetPublicKeyDer only bind when the .so is built with
-// -DSC_TEST_HOOKS; see secure_component.c.
+// Mirrors the real class name/package exactly -- RegisterNatives binds by this descriptor.
 public final class OfflineNativeDefenderService {
     private OfflineNativeDefenderService() {
     }

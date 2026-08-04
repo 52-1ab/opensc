@@ -1,59 +1,4 @@
-/*
- * secure_component.c -- single-file reimplementation of libSecureComponent.so's
- * native surface (NPCI's Common Library, shipped by every UPI app, exposing
- * org.npci.upi.security.pinactivitycomponent.OfflineNativeDefenderService).
- * Behavioral, not bit-for-bit: the real library signs with AndroidKeyStore
- * hardware-backed keys that can't be reproduced, so this uses real RSA-2048 /
- * P-256 keypairs held in process memory instead, generated lazily per alias.
- *
- * Three natives, two-stage registration exactly as the real .so does it:
- *   JNI_OnLoad            -> registers nEnableUPILITEX only
- *   nEnableUPILITEX()V    -> registers the other two
- *   nOfflineSignWithKey(String data, String alias, boolean useEc) -> byte[]
- *     useEc=false: SHA512withRSA/PSS (MGF1-SHA512, salt len = digest len, 2048-bit key)
- *     useEc=true:  SHA256withECDSA over a P-256 key (same alias, different keypair)
- *   nOfflineVerifyEcSignature(String data, String sigB64, PublicKey key) -> boolean
- *     always SHA256withECDSA; sigB64 decoded like android.util.Base64 NO_WRAP
- *
- * Build as a JNI shared library (host arch -- no ARM emulator needed, this runs
- * directly under a plain JVM):
- *   gcc -shared -fPIC -O2 -o libSecureComponentRe.so secure_component.c \
- *       -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
- *       $(pkg-config --cflags --libs openssl) -lpthread
- *
- * Standalone self-test, no JVM involved:
- *   gcc -DSC_TEST_MAIN -O2 -o sc_test secure_component.c \
- *       $(pkg-config --cflags --libs openssl) -lpthread && ./sc_test
- *
- * -DSC_TEST_HOOKS adds nTestUtf8/nTestGetPublicKeyDer alongside the shared-
- * library build above. Not part of the real .so's surface; exists only so
- * src/test/java property tests can check internals (the UTF-8 conversion, the
- * per-alias public keys) against stock JCA that the real 3-native contract has
- * no way to expose. Never define it for a build meant to stand in for the
- * genuine library.
- *
- * -DSC_STDIO_SERVER builds a standalone binary (no JNI, no JVM) speaking a
- * line protocol on stdin/stdout, so this same crypto core can be driven as a
- * long-lived coprocess and cross-checked against other-language reimplementations
- * that speak the same protocol:
- *   gcc -DSC_STDIO_SERVER -O2 -o sc_server secure_component.c \
- *       $(pkg-config --cflags --libs openssl) -lpthread
- * On startup it prints one line, `READY secure_component.c sign,verify,pubkey`,
- * then reads one request per line and writes one response per line until EOF
- * or a line reading exactly "QUIT":
- *   sign <aliasHex> <dataHex> <useEc:00|01>       -> OK <sigHex>
- *   verify <pubkeyDerHex> <dataHex> <sigHex>      -> OK 01 / OK 00
- *   pubkey <aliasHex> <algorithmHex:"RSA"|"EC">   -> OK <derHex>
- *   (anything else)                               -> ERR <message>
- * Every argument after the op is hex; <dataHex> is defined as the UTF-8 bytes
- * of the logical message string, matching what the real JNI entry point sees
- * after Java's String.getBytes(UTF_8) -- so implementations built around a
- * native string type (Go, another JNI build) observe the same bytes this one
- * does. verify takes the public key explicitly rather than resolving it from
- * the alias, because two independently-run implementations never share key
- * material -- that's what makes cross-implementation interop testing possible
- * at all.
- */
+// Reimplementation of libSecureComponent.so (NPCI Common Library); build modes documented in HACKING.md.
 
 #if defined(SC_TEST_MAIN) && defined(SC_STDIO_SERVER)
 #error "SC_TEST_MAIN and SC_STDIO_SERVER are mutually exclusive build modes"
@@ -108,9 +53,7 @@ static AliasKeys *store_get_or_create(const char *alias) {
 }
 
 #ifdef SC_JNI_BUILD
-// JNI's GetStringUTFChars gives *modified* UTF-8 (3-byte surrogate halves, no
-// 4-byte codepoints); Java's own data.getBytes(UTF_8) does not. Convert from
-// UTF-16 by hand so multi-byte input matches what the real native call sees.
+// GetStringUTFChars gives modified UTF-8, unlike Java's own getBytes(UTF_8); convert by hand instead.
 static uint8_t *utf16_to_utf8(JNIEnv *env, jstring s, size_t *out_len) {
     jsize n = (*env)->GetStringLength(env, s);
     const jchar *chars = (*env)->GetStringCritical(env, s, NULL);
@@ -186,9 +129,7 @@ static uint8_t *b64_decode(const char *in, size_t in_len, size_t *out_len) {
 }
 #endif
 
-// digest=SHA-512, mgf1=SHA-512, saltLen=64 (digest length), trailer 0xBC — the
-// literal parameters Java's "SHA512withRSA/PSS" resolves to under the standard
-// RSASSA-PSS engine (that Android/Conscrypt algorithm name has no JCA alias).
+// Java's "SHA512withRSA/PSS" (no JCA alias) is RSASSA-PSS with SHA-512/MGF1-SHA-512/saltLen=64.
 static uint8_t *rsa_pss_sign(EVP_PKEY *key, const uint8_t *msg, size_t msg_len, size_t *sig_len) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     EVP_PKEY_CTX *pctx = NULL;
@@ -257,9 +198,6 @@ static jboolean JNICALL native_verify(JNIEnv *env, jclass clazz, jstring jdata, 
     uint8_t *sig = b64_decode(sig_b64, strlen(sig_b64), &sig_len);
     (*env)->ReleaseStringUTFChars(env, jsigB64, sig_b64);
 
-    // Any JCA PublicKey is portable via its standard X.509 SubjectPublicKeyInfo
-    // encoding, so accept whatever the caller passes the same way the real
-    // native side's Signature.initVerify(PublicKey) would.
     jclass keyClass = (*env)->GetObjectClass(env, pubKeyObj);
     jmethodID getEncoded = (*env)->GetMethodID(env, keyClass, "getEncoded", "()[B");
     jbyteArray encoded = (jbyteArray)(*env)->CallObjectMethod(env, pubKeyObj, getEncoded);
@@ -327,8 +265,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
     jclass clazz = (*env)->FindClass(env, CLS);
     if (!clazz) return JNI_ERR;
-    // Two-stage registration, matching the real .so: only nEnableUPILITEX
-    // exists until Java calls it, which registers the other two.
+    // Two-stage registration matches the real .so: nEnableUPILITEX registers the other two.
     JNINativeMethod method = {"nEnableUPILITEX", "()V", (void *)native_enable};
     if ((*env)->RegisterNatives(env, clazz, &method, 1) != 0) return JNI_ERR;
     return JNI_VERSION_1_6;
@@ -402,8 +339,7 @@ static void print_ok_hex(const uint8_t *data, size_t len) {
     free(line);
 }
 
-// nul-terminates a hex-decoded byte string in place for use as a C string
-// (alias / algorithm name); truncates to fit rather than overflowing.
+// Hex-decodes into a nul-terminated C string, truncating to fit rather than overflowing.
 static void hex_decode_cstr(const char *in, char *out, size_t out_cap) {
     size_t n;
     uint8_t *raw = hex_decode(in, &n);
@@ -413,10 +349,7 @@ static void hex_decode_cstr(const char *in, char *out, size_t out_cap) {
     free(raw);
 }
 
-// strtok_r collapses runs of delimiters, silently dropping empty fields --
-// fatal here, since dataHex is legitimately "" for empty-string payloads.
-// This splits on each individual space instead, so an empty field between
-// two spaces still produces its own (empty) token.
+// strtok_r drops empty fields between delimiters; split on each space instead so "" survives.
 static void split_line(char *line, char *tokens[4]) {
     for (int i = 0; i < 4; i++) tokens[i] = NULL;
     int n = 0;

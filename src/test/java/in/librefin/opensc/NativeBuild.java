@@ -1,4 +1,4 @@
-package in.captnemo.opensc;
+package in.librefin.opensc;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -10,16 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-// Compiles secure_component.c fresh before tests run, in whichever of its
-// mutually-exclusive modes a test needs. Shared by every test class instead
-// of each re-implementing its own ProcessBuilder/pkg-config dance.
-//
-// Every caller that wants the same build mode gets the same fixed output
-// path and therefore the same cached artifact -- SecureComponentPropertyTest
-// and CrossImplementationPropertyTest both want the SC_TEST_HOOKS JNI build,
-// so without this they'd redundantly invoke cc twice for byte-identical
-// output. -O0 (not -O2) because these are correctness tests, not benchmarks:
-// compiling faster matters here, running faster doesn't.
+// Compiles secure_component.c fresh, cached by build mode so callers wanting the same mode share one artifact.
 final class NativeBuild {
     private NativeBuild() {
     }

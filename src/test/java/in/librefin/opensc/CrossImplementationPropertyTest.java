@@ -1,4 +1,4 @@
-package in.captnemo.opensc;
+package in.librefin.opensc;
 
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
@@ -12,17 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
-// Proves the stdin/stdout coprocess protocol (documented at the top of
-// secure_component.c) actually interoperates -- by driving the *same* crypto
-// core through two different transports (in-process JNI vs. a stdio coprocess)
-// and checking they accept each other's output. This is the plumbing that lets
-// a second, independently-written implementation (a different language, a
-// different transport) join the same test suite later without rewriting it:
-// add another ScClient and these properties run against it unchanged.
-//
-// Each backend has its own alias->keypair store (separate processes never
-// share key material), so interop is only checkable because verify() takes
-// the public key explicitly -- see ScClient's doc comment.
+// Proves the stdio coprocess protocol interoperates: same crypto core, two transports (JNI vs. pipe), same ScClient.
 class CrossImplementationPropertyTest {
 
     private static JniClient jni;
@@ -30,10 +20,7 @@ class CrossImplementationPropertyTest {
 
     @BeforeContainer
     static void boot() throws Exception {
-        // JniClient talks to whatever is already System.loaded into this JVM;
-        // container ordering across test classes isn't guaranteed, so this
-        // class loads its own copy under its own name rather than assuming
-        // SecureComponentPropertyTest ran first.
+        // load our own copy rather than assuming another test class already did
         Path so = NativeBuild.buildJniLib(true);
         System.load(so.toAbsolutePath().toString());
         org.npci.upi.security.pinactivitycomponent.OfflineNativeDefenderService.nEnableUPILITEX();

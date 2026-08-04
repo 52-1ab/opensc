@@ -1,4 +1,4 @@
-package in.captnemo.opensc;
+package in.librefin.opensc;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -10,10 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-// Drives an external process implementing the sign/verify/pubkey line protocol
-// documented in secure_component.c: one request line in, one response line
-// out, over a pipe kept open across every call -- not a process forked per
-// operation, which is what makes this usable under 1000-trial properties.
+// Drives an external sign/verify/pubkey coprocess (see secure_component.c) over a pipe kept open across calls.
 class PipeClient implements ScClient {
 
     private final String name;

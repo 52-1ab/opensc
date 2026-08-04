@@ -16,7 +16,7 @@ As a JNI shared library exposing the same APIs:
 
 Requires `cc`, `pkg-config`, and OpenSSL headers on `PATH`.
 
-## `libSecureComponent/`
+## `artifacts/libSecureComponent/`
 
 A git submodule (private repo: `git@github.com:52-1ab/artifacts.git`) holds
 a copy of the upstream binaries that are fetched during tests.

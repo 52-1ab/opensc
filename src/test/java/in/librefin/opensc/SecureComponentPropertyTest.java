@@ -1,4 +1,4 @@
-package in.captnemo.opensc;
+package in.librefin.opensc;
 
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
@@ -24,13 +24,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 
-// Property tests for secure_component.c. It can't be diffed byte-for-byte
-// against the real libSecureComponent.so (that one signs with AndroidKeyStore
-// hardware keys we cannot reproduce -- see README.md), so "identical" here means
-// spec-conformant: signatures this reimplementation produces must verify under
-// the JDK's own, independent SHA512withRSA/PSS and SHA256withECDSA -- and its
-// verifier must accept signatures produced entirely outside of it. Compiles the
-// C source fresh (with -DSC_TEST_HOOKS) before the first property runs.
+// Property tests for secure_component.c: spec-conformance against the JDK's own SHA512withRSA/PSS and SHA256withECDSA.
 class SecureComponentPropertyTest {
 
     private static final PSSParameterSpec PSS_PARAMS =
@@ -74,11 +68,8 @@ class SecureComponentPropertyTest {
 
     // ---- arbitraries ----
 
+    // Small reusable pool, not a fresh string per trial: a new alias costs an RSA-2048 keygen.
     @Provide
-    // A small reusable pool, not a fresh random string per trial: alias content
-    // is never crypto-relevant (just a keystore lookup key), and a fresh alias
-    // costs an RSA-2048 keygen (tens of ms) the first time it's seen. Reusing
-    // ~20 aliases across ~1000 trials turns ~1000 keygens into ~20.
     Arbitrary<String> aliases() {
         return Arbitraries.integers().between(0, 19).map(i -> "alias" + i);
     }
@@ -99,9 +90,6 @@ class SecureComponentPropertyTest {
     Arbitrary<String> garbage() {
         return Arbitraries.strings().withCharRange((char) 0x00, (char) 0x7F).ofMinLength(0).ofMaxLength(120);
     }
-
-    // ---- UTF-8 conversion identity: JNI's modified UTF-8 differs from Java's
-    // ---- own String.getBytes(UTF_8); the reimplementation hand-converts to match it.
 
     @Property
     void utf8ConversionMatchesJavaEncoding(@ForAll("payloads") String s) {
@@ -139,9 +127,6 @@ class SecureComponentPropertyTest {
         return sb.toString();
     }
 
-    // ---- RSA/PSS (useEc=false): must be exactly what Java's own SHA512withRSA/PSS
-    // ---- resolves to -- SHA-512 digest, MGF1-SHA512, salt length 64, trailer 0xBC.
-
     @Property
     void rsaPssIsSpecConformantAndCorrectSize(@ForAll("aliases") String alias, @ForAll("payloads") String data) throws Exception {
         byte[] sig = OfflineNativeDefenderService.nOfflineSignWithKey(data, alias, false);
@@ -156,10 +141,6 @@ class SecureComponentPropertyTest {
         byte[] sig = OfflineNativeDefenderService.nOfflineSignWithKey(data, alias, false);
         check(!rsaPssVerify(rsaKeyFor(alias), other, sig), "RSA/PSS signature verified against different data");
     }
-
-    // ---- ECDSA (useEc=true): SHA256withECDSA over the alias's P-256 keypair.
-    // ---- Checked two ways: against stock JCA, and against the real production
-    // ---- nOfflineVerifyEcSignature entry point (both must agree).
 
     @Property
     void ecdsaIsSpecConformant(@ForAll("aliases") String alias, @ForAll("payloads") String data) throws Exception {
@@ -205,9 +186,7 @@ class SecureComponentPropertyTest {
                 "a PSS signature verified through the ECDSA verifier");
     }
 
-    // ---- externally-generated keys: nOfflineVerifyEcSignature must accept any
-    // ---- JCA PublicKey, not just ones grown from this library's own keystore.
-
+    // verify() must accept any JCA PublicKey, not just ones grown from this library's own keystore
     @Property
     void nativeVerifyAcceptsExternallySignedData(@ForAll("payloads") String data) throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("EC");
@@ -224,9 +203,6 @@ class SecureComponentPropertyTest {
         check(!OfflineNativeDefenderService.nOfflineVerifyEcSignature(data + "x", sigB64, kp.getPublic()),
                 "verified an externally signed EC signature against tampered data");
     }
-
-    // ---- base64: sigB64 is decoded like android.util.Base64 NO_WRAP -- accept any
-    // ---- padding/newline style a real Base64 encoder might reasonably produce.
 
     @Property
     void base64EncodingVariantsAllVerify(@ForAll("payloads") String data) throws Exception {
@@ -246,8 +222,6 @@ class SecureComponentPropertyTest {
         check(OfflineNativeDefenderService.nOfflineVerifyEcSignature(data, unpadded, kp.getPublic()), "unpadded base64 rejected");
         check(OfflineNativeDefenderService.nOfflineVerifyEcSignature(data, mime, kp.getPublic()), "MIME-wrapped base64 rejected");
     }
-
-    // ---- alias -> keypair store: lazily generated, then stable and isolated.
 
     @Property
     void aliasKeysAreDeterministicAcrossCalls(@ForAll("aliases") String alias) throws Exception {
@@ -270,9 +244,7 @@ class SecureComponentPropertyTest {
         check(!Arrays.equals(ecA, ecB), "two different aliases produced the same EC key");
     }
 
-    // ---- verify() must never crash on garbage input; a boolean-returning API
-    // ---- rejecting malformed input is correct, throwing/crashing is not.
-
+    // rejecting malformed input is correct; crashing on it is not
     @Property
     void malformedSignatureBase64NeverVerifies(@ForAll("aliases") String alias, @ForAll("payloads") String data,
                                                 @ForAll("garbage") String junk) throws Exception {

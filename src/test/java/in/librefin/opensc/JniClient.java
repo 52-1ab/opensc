@@ -1,4 +1,4 @@
-package in.captnemo.opensc;
+package in.librefin.opensc;
 
 import org.npci.upi.security.pinactivitycomponent.OfflineNativeDefenderService;
 
@@ -8,15 +8,7 @@ import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
-// In-process backend: the .so is already loaded into this JVM via System.load,
-// so this just forwards to the static natives directly. No coprocess needed --
-// it's already as direct as JNI gets, and going through the pipe protocol would
-// only add overhead for no benefit.
-//
-// data is always the UTF-8 bytes of a logical string (see secure_component.c's
-// protocol doc), so decoding back to a String here is lossless -- the wire
-// protocol's byte contract and the real nOfflineSignWithKey(String, ...)
-// contract agree by construction.
+// In-process backend: the .so is already System.loaded, so this just forwards to the static natives.
 class JniClient implements ScClient {
 
     @Override
