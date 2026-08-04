@@ -56,15 +56,18 @@ Requires `cc`, `pkg-config`, and OpenSSL headers on `PATH`.
 
 ## `libSecureComponent/`
 
-Gitignored. The real, proprietary NPCI binaries this project reimplements --
-one per host app (PhonePe/Navi/Central Bank/BHIM/KreditBee; see
-SECURECOMPONENT-BINDING.md in phonepe-harness) -- distributing them isn't this
-project's to do. Drop your own extracted copies here, named `1.so`..`N.so`,
-for local reference.
+A git submodule (private repo: `git@github.com:52-1ab/artifacts.git`) holding
+the real, proprietary NPCI binaries this project reimplements -- one per host
+app (PhonePe/Navi/Central Bank/BHIM/KreditBee; see SECURECOMPONENT-BINDING.md
+in phonepe-harness) -- distributing them isn't this project's to do, so
+they're kept out of this (public) repo entirely.
 
-If any are present, `RealLibraryTest` runs against every `*.so` file found in
-that directory: it checks each file's SHA1 against the five documented
-host-app hashes, then loads it under a plain Maven Central
+    git submodule update --init libSecureComponent   # needs read access to the private repo
+
+If any `*.so` files are present there (submodule initialized, or your own
+local copies named `1.so`..`N.so` dropped in manually), `RealLibraryTest` runs
+against every one of them: it checks each file's SHA1 against the five
+documented host-app hashes, then loads it under a plain Maven Central
 `unidbg-android`/`unidbg-unicorn2` (not phonepe-harness's vendored/patched
 build -- see the pom.xml comment for why that's unneeded here) with a
 near-bare JNI bridge, and confirms `JNI_OnLoad` and `nEnableUPILITEX` register
@@ -73,6 +76,13 @@ invokes `nOfflineSignWithKey`/`nOfflineVerifyEcSignature` on the real
 libraries -- see `RealLibraryTest`'s class comment for why (a real
 KeyStore/Signature bridge would be needed for that, which already exists as
 `JniBridge.java` in phonepe-harness and isn't duplicated here). Every test in
-that class aborts, rather than fails, when the directory is empty or absent,
-so `mvn test` is green either way; failures across files are aggregated per
-test rather than stopping at the first bad one.
+that class aborts, rather than fails, when the directory is empty or absent
+(no submodule access, or it's just not initialized), so `mvn test` is green
+either way; failures across files are aggregated per test rather than
+stopping at the first bad one.
+
+CI (`.github/workflows/test.yml`) fetches the submodule using a dedicated,
+read-only deploy key (`ARTIFACTS_DEPLOY_KEY` secret, SSH, scoped to only the
+artifacts repo) -- tolerantly: forked-repo pull requests don't get secrets
+(GitHub's own protection), so that step is allowed to fail without blocking
+the rest of the run, and `RealLibraryTest` just aborts its checks instead.

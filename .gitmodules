@@ -1,0 +1,3 @@
+[submodule "libSecureComponent"]
+	path = libSecureComponent
+	url = git@github.com:52-1ab/artifacts.git

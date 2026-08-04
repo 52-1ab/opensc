@@ -1,0 +1,60 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # libSecureComponent/ is fetched separately below, tolerantly --
+          # forked-repo pull requests don't get secrets.ARTIFACTS_DEPLOY_KEY
+          # (GitHub's own protection), so it must never block the rest of CI.
+          submodules: false
+          # Nothing later needs GITHUB_TOKEN persisted in the git config --
+          # the submodule fetch authenticates with its own dedicated SSH key.
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Install OpenSSL headers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config
+
+      - name: Fetch libSecureComponent (best-effort)
+        continue-on-error: true
+        env:
+          GIT_SSH_COMMAND: ssh -i /tmp/artifacts_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
+          # Routed through env rather than interpolated into the script body,
+          # so the shell sees it as a properly quoted variable, not raw text
+          # spliced into the run block before the shell ever parses it.
+          DEPLOY_KEY: ${{ secrets.ARTIFACTS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "no ARTIFACTS_DEPLOY_KEY available (e.g. a fork PR) -- skipping, RealLibraryTest will abort its checks instead of failing"
+            exit 0
+          fi
+          install -m 600 /dev/null /tmp/artifacts_deploy_key
+          printf '%s\n' "$DEPLOY_KEY" > /tmp/artifacts_deploy_key
+          git submodule update --init libSecureComponent
+          shred -u /tmp/artifacts_deploy_key
+
+      - name: Test
+        run: mvn --batch-mode test
