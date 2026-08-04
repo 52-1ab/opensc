@@ -1,6 +1,6 @@
 # opensc
 
-Single-file reimplementation of `libSecureComponent.so`.
+Single-file reimplementation of `libSecureComponent.so` backed by OpenSSL.
 
 ## Build
 

@@ -1,11 +1,3 @@
 target/
 *.class
 .jqwik-database
-
-# libSecureComponent/ is a git submodule (see .gitmodules) pointing at the
-# private 52-1ab/artifacts repo -- the real, proprietary NPCI/PhonePe (and
-# BHIM/Navi/Central Bank/KreditBee) binaries this project reimplements.
-# Tracked as a submodule reference, not ignored: `git submodule update --init`
-# populates it for anyone with read access to that private repo; everyone
-# else just sees an empty directory, which RealLibraryTest already handles
-# (it aborts rather than fails when no *.so files are found there).
