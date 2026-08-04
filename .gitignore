@@ -1,0 +1,9 @@
+target/
+*.class
+.jqwik-database
+
+# The real, proprietary NPCI/PhonePe (and BHIM/Navi/Central Bank/KreditBee)
+# binaries this project reimplements. Never committed -- drop your own
+# extracted copies here for local reference only, one per host app, named
+# 1.so..N.so; RealLibraryTest runs against every *.so file found in this dir.
+libSecureComponent/
