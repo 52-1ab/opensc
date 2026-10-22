@@ -63,6 +63,22 @@ typedef struct {
 int litex_purse_start(litex_purse *p, lite_env *env, const char *alias, double balance);
 void litex_purse_set_remote(litex_purse *p, const char *remote_pub_b64);
 
+// Purse identity fields (o000OO0O assert/verifyIdentity). The purse certificate's key is modelled
+// by the offline EC key, since NPCI's real offline purse-CA keys are not in any APK.
+typedef struct {
+    const char *id, *product, *currency, *country, *type, *mcc;
+} litex_identity;
+
+// Bootstrap: generate the LOCAC challenge, record balance, arm the purse. Returns challenge hex.
+long litex_get_purse_info(litex_purse *p, double balance, char *challenge_out, size_t cap);
+
+// Assert this purse's identity, signing the fields + the remote challenge. Writes an identity doc.
+int litex_assert_identity(litex_purse *p, const litex_identity *id, const char *remote_challenge,
+                          char *out_json, size_t cap);
+
+// Verify a remote identity doc against our challenge; on success adopt its key as the remote pub.
+int litex_verify_identity(litex_purse *p, const char *remote_json, const char *our_challenge);
+
 // Payer: IDLE -> AWAITING_REQ, declines on insufficient balance (PVR bit 7,8). Fills txn_id.
 int litex_start_debit(litex_purse *p, const litex_xfer *x);
 // Payee: IDLE -> AWAITING_VAL, signs REQS over the payload. Fills txn_id and reqs_out.

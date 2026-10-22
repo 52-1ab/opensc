@@ -10,6 +10,27 @@ int main(void) {
     CHECK(litex_purse_start(&payer, &env, "PAYER", 500.0) == 0);
     CHECK(litex_purse_start(&payee, &env, "PAYEE", 100.0) == 0);
 
+    // Identity exchange first: each purse bootstraps a challenge, asserts its signed identity,
+    // and the other verifies it and adopts its key as the remote pub (replacing manual exchange).
+    env.rng = lite_rng_seeded_new(5);
+    char ch_payer[32], ch_payee[32];
+    CHECK(litex_get_purse_info(&payer, 500.0, ch_payer, sizeof ch_payer) == 16);
+    CHECK(litex_get_purse_info(&payee, 100.0, ch_payee, sizeof ch_payee) == 16);
+
+    litex_identity id_payer = {"P", "LITE", "INR", "IN", "PREPAID", NULL};
+    litex_identity id_payee = {"Q", "LITE", "INR", "IN", "PREPAID", NULL};
+    char idoc_payer[1024], idoc_payee[1024];
+    CHECK(litex_assert_identity(&payer, &id_payer, ch_payee, idoc_payer, sizeof idoc_payer) == LX_OK);
+    CHECK(litex_assert_identity(&payee, &id_payee, ch_payer, idoc_payee, sizeof idoc_payee) == LX_OK);
+    CHECK(litex_verify_identity(&payer, idoc_payee, ch_payer) == LX_OK);
+    CHECK(litex_verify_identity(&payee, idoc_payer, ch_payee) == LX_OK);
+
+    char tampered_id[1024];
+    snprintf(tampered_id, sizeof tampered_id, "%s", idoc_payee);
+    char *sigpos = strstr(tampered_id, "\"signature\":\"");
+    sigpos[13] = (sigpos[13] == 'A') ? 'B' : 'A';
+    CHECK(litex_verify_identity(&payer, tampered_id, ch_payer) == LX_BAD_SIG);
+
     char payer_pub[512], payee_pub[512];
     CHECK(litex_offline_pubkey(&env, "PAYER", payer_pub, sizeof payer_pub) > 0);
     CHECK(litex_offline_pubkey(&env, "PAYEE", payee_pub, sizeof payee_pub) > 0);
@@ -54,6 +75,7 @@ int main(void) {
     CHECK(litex_request_value(&idle, reqs, tras, sizeof tras) == LX_ERR_STATE);
 
     lite_keystore_mem_free(env.keystore);
+    lite_rng_seeded_free((lite_rng *)env.rng);
     printf("test_litex_flow");
     DONE();
 }
