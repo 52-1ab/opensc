@@ -37,9 +37,13 @@ int main(void) {
         if (strcmp(line, "QUIT") == 0) break;
         if (line[0] == '\0') continue;
 
+        // Split on single spaces keeping empty fields, so an empty hex arg (e.g. "") survives.
         char *tok[8] = {0};
         int nt = 0;
-        for (char *p = strtok(line, " "); p && nt < 8; p = strtok(NULL, " ")) tok[nt++] = p;
+        tok[nt++] = line;
+        for (char *p = line; *p && nt < 8; p++) {
+            if (*p == ' ') { *p = '\0'; tok[nt++] = p + 1; }
+        }
         char out[4096];
 
         if (strcmp(tok[0], "alias") == 0 && nt == 5) {
