@@ -32,6 +32,10 @@ vectors: tools/gen_vectors.c $(LIBSRC) | build
 	$(CC) $(CFLAGS) $(INC) tools/gen_vectors.c $(LIBSRC) $(OSSL) -o build/gen_vectors
 	./build/gen_vectors vectors/vectors.json
 
+oracle-tools: tools/gen_oracle_crosscheck.c tools/check_cl_vault.c $(LIBSRC) | build
+	$(CC) $(CFLAGS) $(INC) tools/gen_oracle_crosscheck.c $(LIBSRC) $(OSSL) -o build/gen_oracle_crosscheck
+	$(CC) $(CFLAGS) $(INC) tools/check_cl_vault.c $(LIBSRC) $(OSSL) -o build/check_cl_vault
+
 .PHONY: clean
 clean:
 	rm -rf build

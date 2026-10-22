@@ -1,3 +1,5 @@
 target/
 *.class
 .jqwik-databaselite/build/
+lite/oracle/.jars/
+lite/oracle/.build/
