@@ -1,5 +1,6 @@
 #include "lite/litex.h"
 #include "lite/codec.h"
+#include "lite/json.h"
 #include "lite/primitives.h"
 
 #include <stdio.h>
@@ -170,4 +171,73 @@ int litex_acknowledge_value(litex_purse *p, const char *reqs, const char *tras, 
     if (litex_verify_pub(p->env, p->remote_pub, chain2, acks) != 1) return LX_BAD_SIG;
     p->state = LX_IDLE;
     return LX_OK;
+}
+
+long litex_get_purse_info(litex_purse *p, double balance, char *challenge_out, size_t cap) {
+    uint8_t rnd[8];
+    if (p->env->rng->fill(p->env->rng->ctx, rnd, sizeof rnd) != 0) return -1;
+    if (cap < 17) return -1;
+    lite_hex_encode(rnd, 8, challenge_out, cap);
+    p->balance = balance;
+    p->state = LX_IDLE;
+    return 16;
+}
+
+// Payload order matches o000OO0O assert/verifyIdentity: id+product+currency+country+type+mcc+cert+challenge.
+static void identity_payload(const char *id, const char *product, const char *currency,
+                             const char *country, const char *type, const char *mcc,
+                             const char *cert, const char *challenge, char *out, size_t cap) {
+    snprintf(out, cap, "%s%s%s%s%s%s%s%s", id, product, currency, country, type,
+             mcc ? mcc : "", cert, challenge);
+}
+
+int litex_assert_identity(litex_purse *p, const litex_identity *id, const char *remote_challenge,
+                          char *out_json, size_t cap) {
+    char cert[512];
+    if (litex_offline_pubkey(p->env, p->alias, cert, sizeof cert) < 0) return -1;
+    char payload[2048];
+    identity_payload(id->id, id->product, id->currency, id->country, id->type, id->mcc, cert,
+                     remote_challenge, payload, sizeof payload);
+    char ps[512];
+    if (litex_sign(p->env, p->alias, payload, ps, sizeof ps) < 0) return -1;
+    lj_node *o = lj_new_obj();
+    lj_put_str(o, "id", id->id);
+    lj_put_str(o, "product", id->product);
+    lj_put_str(o, "currency", id->currency);
+    lj_put_str(o, "country", id->country);
+    lj_put_str(o, "type", id->type);
+    if (id->mcc) lj_put_str(o, "mcc", id->mcc);
+    lj_put_str(o, "purseCertificate", cert);
+    lj_put_str(o, "signature", ps);
+    char *s = lj_dump(o);
+    lj_free(o);
+    int rc = LX_OK;
+    if (strlen(s) + 1 > cap) rc = -1; else memcpy(out_json, s, strlen(s) + 1);
+    free(s);
+    return rc;
+}
+
+int litex_verify_identity(litex_purse *p, const char *remote_json, const char *our_challenge) {
+    lj_node *o = lj_parse(remote_json, strlen(remote_json));
+    if (!o) return -1;
+    const char *cert = lj_get_str(o, "purseCertificate", NULL);
+    const char *ps = lj_get_str(o, "signature", NULL);
+    const char *mcc = lj_get_str(o, "mcc", NULL);
+    int rc;
+    if (!cert || !ps) {
+        rc = -1;
+    } else {
+        char payload[2048];
+        identity_payload(lj_get_str(o, "id", ""), lj_get_str(o, "product", ""),
+                         lj_get_str(o, "currency", ""), lj_get_str(o, "country", ""),
+                         lj_get_str(o, "type", ""), mcc, cert, our_challenge, payload, sizeof payload);
+        if (litex_verify_pub(p->env, cert, payload, ps) == 1) {
+            snprintf(p->remote_pub, sizeof p->remote_pub, "%s", cert);
+            rc = LX_OK;
+        } else {
+            rc = LX_BAD_SIG;
+        }
+    }
+    lj_free(o);
+    return rc;
 }
