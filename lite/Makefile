@@ -8,7 +8,7 @@ SRC := src/codec.c src/json.c src/alias.c src/vault.c src/riskrules.c src/wallet
 BACKENDS := backends/openssl/crypto_openssl.c backends/mem/keystore_mem.c backends/mem/store_mem.c backends/mem/env_mem.c
 LIBSRC := $(SRC) $(BACKENDS)
 
-TESTS := test_codec test_alias test_vault test_wallet test_litex
+TESTS := test_codec test_alias test_vault test_wallet test_litex test_vectors
 TESTBIN := $(addprefix build/,$(TESTS))
 
 build/test_wallet: test/test_wallet.c test/npci_test_ca.c $(LIBSRC) | build
@@ -27,6 +27,10 @@ test: $(TESTBIN)
 
 server: tools/stdio_server.c $(LIBSRC) | build
 	$(CC) $(CFLAGS) $(INC) tools/stdio_server.c $(LIBSRC) $(OSSL) -o build/lite_server
+
+vectors: tools/gen_vectors.c $(LIBSRC) | build
+	$(CC) $(CFLAGS) $(INC) tools/gen_vectors.c $(LIBSRC) $(OSSL) -o build/gen_vectors
+	./build/gen_vectors vectors/vectors.json
 
 .PHONY: clean
 clean:
