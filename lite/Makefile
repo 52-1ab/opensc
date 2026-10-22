@@ -8,7 +8,7 @@ SRC := src/codec.c src/json.c src/alias.c src/vault.c src/riskrules.c src/wallet
 BACKENDS := backends/openssl/crypto_openssl.c backends/mem/keystore_mem.c backends/mem/store_mem.c backends/mem/env_mem.c
 LIBSRC := $(SRC) $(BACKENDS)
 
-TESTS := test_codec test_alias test_vault test_wallet test_litex test_vectors
+TESTS := test_codec test_alias test_vault test_wallet test_litex test_litex_flow test_vectors
 TESTBIN := $(addprefix build/,$(TESTS))
 
 build/test_wallet: test/test_wallet.c test/npci_test_ca.c $(LIBSRC) | build

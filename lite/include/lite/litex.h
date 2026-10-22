@@ -10,6 +10,8 @@
 
 typedef enum { LX_IDLE, LX_AWAITING_REQ, LX_AWAITING_VAL, LX_AWAITING_ACK } litex_state;
 
+enum { LX_OK = 0, LX_ERR_STATE = -1, LX_DECLINED = -2, LX_BAD_SIG = -3 };
+
 // 8-byte Purse Verification Result bitmap. Index/bit are 1-based, as in the CL's setPVR.
 typedef struct { uint8_t b[8]; } litex_pvr;
 
@@ -35,5 +37,41 @@ int litex_enable(lite_env *env, const char *alias);
 // Signs/verifies a transfer-value payload with ECDSA-SHA256 over the offline key.
 long litex_sign(lite_env *env, const char *alias, const char *data, char *out_b64, size_t cap);
 int litex_verify(lite_env *env, const char *alias, const char *data, const char *sig_b64);
+
+// Exports the offline EC public key (alias + "-OFFLINE") as base64 SPKI, and verifies with one.
+long litex_offline_pubkey(lite_env *env, const char *alias, char *out_b64, size_t cap);
+int litex_verify_pub(lite_env *env, const char *pub_b64, const char *data, const char *sig_b64);
+
+// One leg of an offline P2P transfer. Fields order matches the CL's generateSignaturePayload.
+typedef struct {
+    const char *payer_id, *payer_seq, *payer_vpa;
+    const char *payee_id, *payee_seq, *payee_vpa;
+    const char *timestamp, *currency, *amount;
+} litex_xfer;
+
+// A purse party in the offline transfer handshake.
+typedef struct {
+    lite_env *env;
+    char alias[256];
+    char remote_pub[512];
+    litex_state state;
+    double balance;
+    char txndp[1024];   // running signed payload: base + each appended signature
+    char txn_id[64];
+} litex_purse;
+
+int litex_purse_start(litex_purse *p, lite_env *env, const char *alias, double balance);
+void litex_purse_set_remote(litex_purse *p, const char *remote_pub_b64);
+
+// Payer: IDLE -> AWAITING_REQ, declines on insufficient balance (PVR bit 7,8). Fills txn_id.
+int litex_start_debit(litex_purse *p, const litex_xfer *x);
+// Payee: IDLE -> AWAITING_VAL, signs REQS over the payload. Fills txn_id and reqs_out.
+int litex_start_credit(litex_purse *p, const litex_xfer *x, char *reqs_out, size_t cap);
+// Payer: AWAITING_REQ -> AWAITING_ACK, verifies REQS, signs TRAS.
+int litex_request_value(litex_purse *p, const char *reqs, char *tras_out, size_t cap);
+// Payee: AWAITING_VAL -> IDLE, verifies TRAS over payload+REQS, signs ACKS over payload+REQS+TRAS.
+int litex_transfer_value(litex_purse *p, const char *reqs, const char *tras, char *acks_out, size_t cap);
+// Payer: AWAITING_ACK -> IDLE, verifies ACKS over payload+REQS+TRAS.
+int litex_acknowledge_value(litex_purse *p, const char *reqs, const char *tras, const char *acks);
 
 #endif
