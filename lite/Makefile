@@ -41,6 +41,10 @@ oracle-tools: tools/gen_oracle_crosscheck.c tools/check_cl_vault.c tools/gen_syn
 waydroid-gen: oracle/waydroid/gen_waydroid_states.c test/npci_test_ca.c $(LIBSRC) | build
 	$(CC) $(CFLAGS) $(INC) -Itest oracle/waydroid/gen_waydroid_states.c test/npci_test_ca.c $(LIBSRC) $(OSSL) -o build/gen_waydroid_states
 
+.PHONY: python-test
+python-test:
+	cd python && uv run --python 3.15 python test_vectors.py
+
 .PHONY: clean
 clean:
 	rm -rf build
