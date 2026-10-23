@@ -4,3 +4,6 @@
 [submodule "lite/third_party/parson"]
 	path = lite/third_party/parson
 	url = https://github.com/kgabis/parson.git
+[submodule "third_party/doxygen-awesome-css"]
+	path = third_party/doxygen-awesome-css
+	url = https://github.com/jothepro/doxygen-awesome-css

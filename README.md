@@ -10,12 +10,13 @@ submodules:
 
     git clone --recurse-submodules <repo-url>
 
-Already cloned? Pull the submodule in:
+Already cloned? Pull the public submodules in:
 
-    git submodule update --init lite/third_party/parson
+    git submodule update --init lite/third_party/parson third_party/doxygen-awesome-css
 
-parson is public and required to build `lite/`. The `artifacts/` submodule below is private and
-optional (only the real-binary tests need it); a clone without it still builds and tests `lite/`.
+parson is public and required to build `lite/`; doxygen-awesome-css is public and only needed
+for `make docs`. The `artifacts/` submodule below is private and optional (only the real-binary
+tests need it); a clone without it still builds and tests `lite/`.
 
 ## Build
 
@@ -48,11 +49,13 @@ Lite X P2P). Build and run the tests (needs the parson submodule, `cc`, `pkg-con
 ## Docs
 
 Generate HTML + man API docs for the whole project (`secure_component.c` and the `lite/`
-public API) into `build/docs/` with [Doxygen](https://www.doxygen.nl):
+public API) into `build/docs/` with [Doxygen](https://www.doxygen.nl); the HTML is themed with
+[doxygen-awesome-css](https://github.com/jothepro/doxygen-awesome-css) (a submodule):
 
     make docs
 
 ## LICENSE
 
 Licensed under [The Unlicense](https://choosealicense.com/licenses/unlicense/). Vendored parson
-(`lite/third_party/parson`) is MIT, © Krzysztof Gabis.
+(`lite/third_party/parson`) is MIT, © Krzysztof Gabis, and doxygen-awesome-css
+(`third_party/doxygen-awesome-css`) is MIT, © jothepro.

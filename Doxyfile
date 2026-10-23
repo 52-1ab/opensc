@@ -25,6 +25,22 @@ JAVADOC_AUTOBRIEF      = YES
 TYPEDEF_HIDES_STRUCT   = YES
 QUIET                  = YES
 
+# doxygen-awesome-css theme, vendored at third_party/doxygen-awesome-css.
+# HTML_COLORSTYLE=LIGHT is required; the theme ships its own dark mode.
 GENERATE_HTML          = YES
 GENERATE_MAN           = YES
 GENERATE_LATEX         = NO
+
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_HEADER            = header.html
+HTML_EXTRA_STYLESHEET  = third_party/doxygen-awesome-css/doxygen-awesome.css \
+                         third_party/doxygen-awesome-css/doxygen-awesome-sidebar-only.css \
+                         third_party/doxygen-awesome-css/doxygen-awesome-sidebar-only-darkmode-toggle.css
+HTML_EXTRA_FILES       = third_party/doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js \
+                         third_party/doxygen-awesome-css/doxygen-awesome-fragment-copy-button.js \
+                         third_party/doxygen-awesome-css/doxygen-awesome-paragraph-link.js \
+                         third_party/doxygen-awesome-css/doxygen-awesome-interactive-toc.js \
+                         third_party/doxygen-awesome-css/doxygen-awesome-tabs.js
