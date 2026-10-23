@@ -1,0 +1,162 @@
+# Using opensc
+
+opensc has three parts:
+
+- `lite/` — the UPI Lite and Lite X wallet, in C.
+- `python/` — the same wallet and the signing engine, in Python.
+- `secure_component.c` — the native signing engine, in C.
+
+Use the C library in an app. Use the Python code as a reference and for tests.
+
+## Set up the environment (C)
+
+The wallet runs against an environment that you supply. Build one, then pass its
+address to every wallet call.
+
+```c
+lite_env env = {0};
+env.crypto = lite_crypto_openssl();
+env.keystore = lite_keystore_mem_new();
+env.store = lite_store_mem_new();
+env.clock = lite_clock_fixed_new(1767225600000LL);
+env.rng = lite_rng_seeded_new(7);
+env.signer_upi_cert = cert;          // signer-upi.crt bytes
+env.signer_upi_cert_len = cert_len;
+```
+
+## Online UPI Lite (C)
+
+Call the functions in this order:
+
+1. Build the alias with `lite_alias()`.
+2. Onboard with the first signed state with `lite_onboard()`.
+3. Read the binding with `lite_is_bound()`.
+4. Read the balance with `lite_balance()`.
+5. Sign a payment with `lite_spend()`.
+6. Apply a new signed state with `lite_sync()`.
+7. Remove the device with `lite_unbind()`.
+
+```c
+char alias[256];
+lite_alias(env.crypto, "DEV123", "9000000000", "ACC789", "UPI", alias, sizeof alias);
+
+lite_onboard(&env, alias, signed_state);        // returns LITE_SYNC_OK
+
+lite_bind_info bi;
+lite_is_bound(&env, alias, &bi);                // LITE_BIND_YES
+
+lite_balance_info bal;
+lite_balance(&env, alias, &bal);                // bal.balance, bal.pending_count
+
+lite_txn txn = {"100.00", "TXN1", "20260101120000", "5001234567",
+                "merchant@upi", "com.phonepe.app", "9000000000", "DEV123"};
+char out[8192];
+lite_spend(&env, alias, &txn, 0, out, sizeof out);   // 0 = debit, 1 = credit
+
+lite_sync(&env, alias, next_signed_state);
+lite_unbind(&env, alias);
+```
+
+Call `lite_sync()` after each payment. Until you do, `lite_spend()` returns
+`LITE_SPEND_SYNC_REQUIRED`.
+
+## Offline UPI Lite X (C)
+
+A transfer runs between two devices: the payer (sends money) and the payee (receives
+money). Each device runs its own purse. Because the devices are offline, your app
+carries these messages between them over any channel (QR code, NFC, Bluetooth):
+
+- the challenge from `litex_get_purse_info()`
+- the identity document from `litex_assert_identity()`
+- the transfer messages REQS, TRAS, and ACKS
+
+Both devices run the setup and identity steps. Values named `their_*` arrive from the
+other device.
+
+Setup and identity (each device):
+
+1. Start your purse with `litex_purse_start()`.
+2. Make your challenge with `litex_get_purse_info()`. Send it to the other device.
+3. Sign your identity with `litex_assert_identity()`, using the challenge you received.
+   Send the result.
+4. Verify the identity you received with `litex_verify_identity()`.
+
+```c
+litex_purse me;
+litex_purse_start(&me, &env, "PAYER", 500.0);
+
+char my_challenge[32];
+litex_get_purse_info(&me, 500.0, my_challenge, sizeof my_challenge);   // send to the other device
+
+litex_identity my_id = {"P", "LITE", "INR", "IN", "PREPAID", NULL};
+char my_doc[1024];
+litex_assert_identity(&me, &my_id, their_challenge, my_doc, sizeof my_doc);   // send my_doc
+litex_verify_identity(&me, their_doc, my_challenge);
+```
+
+Then run the transfer. Each device sends the message it produces to the other.
+
+The payer runs:
+
+5. Call `litex_start_debit()`.
+6. Call `litex_request_value(their_reqs)`. Send the TRAS it returns.
+7. Call `litex_acknowledge_value(their_reqs, tras, their_acks)`.
+
+The payee runs:
+
+5. Call `litex_start_credit()`. Send the REQS it returns.
+6. Call `litex_transfer_value(my_reqs, their_tras)`. Send the ACKS it returns.
+
+```c
+// This device is the payer. their_reqs and their_acks arrive from the payee.
+litex_xfer x = {"P","1","p@upi","Q","1","q@upi","1767225600000","INR","50.00"};
+char tras[512];
+litex_start_debit(&me, &x);
+litex_request_value(&me, their_reqs, tras, sizeof tras);   // send tras to the payee
+litex_acknowledge_value(&me, their_reqs, tras, their_acks);
+```
+
+## Online UPI Lite (Python)
+
+The Python API mirrors the C API.
+
+```python
+import opensc_lite as o
+pem, sign_state = o.make_test_ca()
+env = o.Env(signer_cert_pem=pem)
+al = o.alias("DEV123", "9000000000", "ACC789", "UPI")
+
+o.onboard(env, al, sign_state('{"BAL":"5000.00","LTL":"1000.00","ACSTATUS":"A","timestamp":"1000"}'))
+o.is_bound(env, al)
+o.balance(env, al)
+txn = {"amount": "100.00", "txn_id": "TXN1", "ts": "20260101120000",
+       "payer_lite_acc": "5001234567", "payee_addr": "merchant@upi",
+       "app_id": "com.phonepe.app", "mobile": "9000000000", "device_id": "DEV123"}
+o.spend(env, al, txn, False)         # False = debit, True = credit
+o.sync(env, al, sign_state('{"BAL":"4900.00","LTL":"1000.00","ACSTATUS":"A","timestamp":"2000"}'))
+o.unbind(env, al)
+```
+
+## Signing engine (Python)
+
+Call the methods in this order:
+
+1. Create a `SecureComponent`.
+2. Call `enable()`.
+3. Sign with `sign(data, alias, use_ec)`.
+4. Read the public key with `public_key_der(alias, "EC")`.
+5. Verify with `verify(data, signature_base64, public_key_der)`.
+
+```python
+import base64
+from secure_component import SecureComponent
+
+sc = SecureComponent()
+sc.enable()
+sig = sc.sign("5241234567890123|100.00|20260803", "NPCI_UPI_LITE_X", use_ec=True)
+pub = sc.public_key_der("NPCI_UPI_LITE_X", "EC")
+sc.verify("5241234567890123|100.00|20260803", base64.b64encode(sig).decode(), pub)  # True
+```
+
+Use `use_ec=True` for ECDSA-SHA256. Use `use_ec=False` for RSA-PSS-SHA512.
+Call `enable()` before `sign()` or `verify()`.

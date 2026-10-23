@@ -7,11 +7,14 @@ PROJECT_NAME           = "opensc"
 PROJECT_BRIEF          = "NPCI secure-component & UPI Lite / Lite X wallet reimplementation"
 OUTPUT_DIRECTORY       = build/docs
 
-INPUT                  = secure_component.c \
+INPUT                  = doc/usage.md \
+                         secure_component.c \
                          lite/include/lite \
-                         lite/python/opensc_lite.py
-FILE_PATTERNS          = *.c *.h *.py
+                         python/opensc_lite.py \
+                         python/secure_component.py
+FILE_PATTERNS          = *.c *.h *.py *.md
 RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = doc/usage.md
 
 # Document every public declaration; warn on anything left undocumented so
 # a gap fails the build-docs check rather than passing silently.
