@@ -146,23 +146,18 @@ the keystore. Use it to:
 - verify a signature you received from another device
 - export a device's public key so another party can verify its signatures
 
-The engine starts disabled. Call `enable()` once to turn on `sign()` and `verify()`;
-both raise until you do.
-
 Call the methods in this order:
 
 1. Create a `SecureComponent`.
-2. Call `enable()`.
-3. Sign a payload with `sign(data, alias, use_ec)`. It returns the signature bytes.
-4. Export the public key with `public_key_der(alias, "EC")`. Send it to the verifier.
-5. Verify a received signature with `verify(data, signature_base64, public_key_der)`.
+2. Sign a payload with `sign(data, alias, use_ec)`. It returns the signature bytes.
+3. Export the public key with `public_key_der(alias, "EC")`. Send it to the verifier.
+4. Verify a received signature with `verify(data, signature_base64, public_key_der)`.
 
 ```python
 import base64
 from secure_component import SecureComponent
 
 sc = SecureComponent()
-sc.enable()
 
 # Sign a payload with the device's offline key.
 sig = sc.sign("5241234567890123|100.00|20260803", "NPCI_UPI_LITE_X", use_ec=True)

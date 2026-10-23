@@ -1,8 +1,9 @@
 """Pure-Python mirror of secure_component.c's crypto core (NPCI's native signing engine).
 
-Reproduces the alias keystore and the nOfflineSignWithKey / nOfflineVerifyEcSignature /
-nEnableUPILITEX behaviour of libSecureComponent.so, without the JNI or stdio interfaces.
-The signing algorithms and the android-NO_WRAP base64 decode match the C byte-for-byte.
+Reproduces the alias keystore and the nOfflineSignWithKey / nOfflineVerifyEcSignature
+signing behaviour of libSecureComponent.so, without the JNI or stdio interfaces (the
+nEnableUPILITEX JNI registration step has no meaning outside JNI). The signing
+algorithms and the android-NO_WRAP base64 decode match the C byte-for-byte.
 """
 
 import base64
@@ -30,16 +31,11 @@ def _b64_decode(s):
 
 
 class SecureComponent:
-    """The native signing engine: a per-alias RSA+EC keystore with sign and verify.
-
-    Call enable() (nEnableUPILITEX) before sign()/verify(), mirroring the genuine .so's
-    two-stage registration where the signing natives are unavailable until then.
-    """
+    """The native signing engine: a per-alias RSA+EC keystore with sign and verify."""
 
     def __init__(self):
         self._store = {}
         self._lock = threading.Lock()
-        self._enabled = False
 
     def _get_or_create(self, alias):
         with self._lock:
@@ -49,21 +45,12 @@ class SecureComponent:
                 self._store[alias] = keys
             return keys
 
-    def _require_enabled(self):
-        if not self._enabled:
-            raise RuntimeError("engine not enabled; call enable() (nEnableUPILITEX) first")
-
-    def enable(self):
-        """nEnableUPILITEX: arms the engine so sign() and verify() become available."""
-        self._enabled = True
-
     def sign(self, data, alias, use_ec):
         """nOfflineSignWithKey: sign `data` under `alias`, returning the raw signature bytes.
 
         RSA-PSS-SHA512 by default, ECDSA-SHA256 (DER) when `use_ec`. `data` is a str (encoded
         UTF-8, as the JNI layer converts the Java String) or bytes. Lazily creates the alias keys.
         """
-        self._require_enabled()
         rsa_key, ec_key = self._get_or_create(alias)
         msg = data.encode() if isinstance(data, str) else data
         if use_ec:
@@ -76,7 +63,6 @@ class SecureComponent:
         `sig_b64` is the base64 signature (android NO_WRAP); `pub_der` is the public key as
         DER SubjectPublicKeyInfo, i.e. what java.security.PublicKey.getEncoded() returns.
         """
-        self._require_enabled()
         msg = data.encode() if isinstance(data, str) else data
         sig = _b64_decode(sig_b64)
         try:

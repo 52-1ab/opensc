@@ -11,19 +11,8 @@ B64_KNOWN = "aGVsbG8sIHdvcmxkIQ=="
 ALIAS = "NPCI_UPI_LITE_X"
 
 
-def test_enable_gate():
-    sc = SecureComponent()
-    try:
-        sc.sign(MSG, ALIAS, True)
-        raise AssertionError("sign must be gated until enable()")
-    except RuntimeError:
-        pass
-    sc.enable()
-
-
 def test_sign_verify_roundtrip():
     sc = SecureComponent()
-    sc.enable()
     pss = sc.sign(MSG, ALIAS, False)
     assert len(pss) == 256  # RSA-2048 PSS signature
 
@@ -43,5 +32,5 @@ def test_base64_nowrap():
 
 
 if __name__ == "__main__":
-    test_enable_gate(); test_sign_verify_roundtrip(); test_base64_nowrap()
+    test_sign_verify_roundtrip(); test_base64_nowrap()
     print("OK secure_component")
