@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -std=c23 -O1 -g -Wall -Wextra -Wpedantic -Werror
+CFLAGS ?= -std=c2x -O1 -g -Wall -Wextra -Wpedantic -Werror
 SAN := -fsanitize=address,undefined -fno-omit-frame-pointer
 INC := -Iinclude -Ithird_party/parson
 OSSL := $(shell pkg-config --cflags --libs openssl)
