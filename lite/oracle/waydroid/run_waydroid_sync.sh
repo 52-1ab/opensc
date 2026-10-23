@@ -34,13 +34,18 @@ cp "$CACHE/cert.pem" "$CACHE/signer-upi.crt"
 # 3. Push the harness and the genuine CL dex to the device.
 adb -s "$SERIAL" shell 'rm -rf /data/local/tmp/lx; mkdir -p /data/local/tmp/lx'
 adb -s "$SERIAL" push "$CACHE/harness.jar" /data/local/tmp/lx/harness.jar >/dev/null
-adb -s "$SERIAL" push "$CL_DEX" /data/local/tmp/lx/cl.dex >/dev/null
+# CL_DEX is the app APK (all dexes; R8 scattered the CL's helper classes across them). harness.jar
+# precedes it so our test signer-upi.crt wins over the app's real one for riskRules verify.
+adb -s "$SERIAL" push "$CL_DEX" /data/local/tmp/lx/cl.apk >/dev/null
 
 # 4. Run the genuine sync per case and compare to the expected device result.
-CP=/data/local/tmp/lx/harness.jar:/data/local/tmp/lx/cl.dex
+CP=/data/local/tmp/lx/harness.jar:/data/local/tmp/lx/cl.apk
 fail=0
 while IFS=$'\t' read -r label mob dev acc k old new cdec expect; do
-    out=$(adb -s "$SERIAL" shell "CLASSPATH=$CP app_process /system/bin CLHarness $mob $dev $acc $k $old $new $label" 2>&1 | tr -d '\r')
+    # Fresh account ref per case → fresh alias → fresh vault + keystore keys (acc is not in the signed state).
+    acc="ACC$(date +%s%N)"
+    # </dev/null so adb shell does not swallow the loop's stdin; 240s covers first-run APK verification.
+    out=$(timeout 240 adb -s "$SERIAL" shell "CLASSPATH=$CP app_process /system/bin CLHarness $mob $dev $acc $k $old $new $label" </dev/null 2>&1 | tr -d '\r')
     got=$(printf '%s\n' "$out" | sed -n 's/^RESULT '"$label"' //p')
     if [[ "$got" == "$expect" ]]; then
         echo "PASS $label: genuine CL=$got  (C=$cdec)"
