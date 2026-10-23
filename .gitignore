@@ -3,3 +3,4 @@ target/
 .jqwik-databaselite/build/
 lite/oracle/.jars/
 lite/oracle/.build/
+lite/oracle/waydroid/.cache/
