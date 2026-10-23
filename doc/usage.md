@@ -139,13 +139,23 @@ o.unbind(env, al)
 
 ## Signing engine (Python)
 
+The signing engine signs and verifies data with per-alias device keys that stay in
+the keystore. Use it to:
+
+- sign an offline transaction payload with a device key, named by alias
+- verify a signature you received from another device
+- export a device's public key so another party can verify its signatures
+
+The engine starts disabled. Call `enable()` once to turn on `sign()` and `verify()`;
+both raise until you do.
+
 Call the methods in this order:
 
 1. Create a `SecureComponent`.
 2. Call `enable()`.
-3. Sign with `sign(data, alias, use_ec)`.
-4. Read the public key with `public_key_der(alias, "EC")`.
-5. Verify with `verify(data, signature_base64, public_key_der)`.
+3. Sign a payload with `sign(data, alias, use_ec)`. It returns the signature bytes.
+4. Export the public key with `public_key_der(alias, "EC")`. Send it to the verifier.
+5. Verify a received signature with `verify(data, signature_base64, public_key_der)`.
 
 ```python
 import base64
@@ -153,10 +163,17 @@ from secure_component import SecureComponent
 
 sc = SecureComponent()
 sc.enable()
+
+# Sign a payload with the device's offline key.
 sig = sc.sign("5241234567890123|100.00|20260803", "NPCI_UPI_LITE_X", use_ec=True)
+
+# Share this public key with the other party.
 pub = sc.public_key_der("NPCI_UPI_LITE_X", "EC")
+
+# Anyone holding the public key can verify the signature.
 sc.verify("5241234567890123|100.00|20260803", base64.b64encode(sig).decode(), pub)  # True
 ```
 
-Use `use_ec=True` for ECDSA-SHA256. Use `use_ec=False` for RSA-PSS-SHA512.
-Call `enable()` before `sign()` or `verify()`.
+Pass `use_ec=True` to sign with ECDSA-SHA256, or `use_ec=False` for RSA-PSS-SHA512.
+`sign()` creates the alias key the first time you use it. `verify()` checks
+ECDSA-SHA256 signatures only.
