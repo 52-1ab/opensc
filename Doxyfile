@@ -1,0 +1,30 @@
+# Doxygen config for the whole opensc project.
+# Covers the genuine secure-component reimplementation (secure_component.c)
+# and the UPI Lite / Lite X wallet public API (lite/include/lite).
+# Run from the repo root with `make docs`.
+
+PROJECT_NAME           = "opensc"
+PROJECT_BRIEF          = "NPCI secure-component & UPI Lite / Lite X wallet reimplementation"
+OUTPUT_DIRECTORY       = build/docs
+
+INPUT                  = secure_component.c \
+                         lite/include/lite
+FILE_PATTERNS          = *.c *.h
+RECURSIVE              = YES
+
+# Document every public declaration; warn on anything left undocumented so
+# a gap fails the build-docs check rather than passing silently.
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = NO
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+JAVADOC_AUTOBRIEF      = YES
+TYPEDEF_HIDES_STRUCT   = YES
+QUIET                  = YES
+
+GENERATE_HTML          = YES
+GENERATE_MAN           = YES
+GENERATE_LATEX         = NO

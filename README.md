@@ -45,6 +45,13 @@ Lite X P2P). Build and run the tests (needs the parson submodule, `cc`, `pkg-con
 
     make -C lite test
 
+## Docs
+
+Generate HTML + man API docs for the whole project (`secure_component.c` and the `lite/`
+public API) into `build/docs/` with [Doxygen](https://www.doxygen.nl):
+
+    make docs
+
 ## LICENSE
 
 Licensed under [The Unlicense](https://choosealicense.com/licenses/unlicense/). Vendored parson

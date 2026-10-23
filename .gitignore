@@ -1,6 +1,8 @@
 target/
 *.class
-.jqwik-databaselite/build/
+.jqwik-database
+/build/
+lite/build/
 lite/oracle/.jars/
 lite/oracle/.build/
 lite/oracle/waydroid/.cache/

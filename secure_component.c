@@ -1,10 +1,13 @@
-// Reimplementation of libSecureComponent.so (NPCI Common Library); build modes documented in HACKING.md.
+/// @file
+/// Single-file reimplementation of libSecureComponent.so (NPCI's Common Library).
+/// Build modes (JNI shared lib / self-test / stdio server) are documented in HACKING.md.
 
 #if defined(SC_TEST_MAIN) && defined(SC_STDIO_SERVER)
 #error "SC_TEST_MAIN and SC_STDIO_SERVER are mutually exclusive build modes"
 #endif
 
 #if !defined(SC_TEST_MAIN) && !defined(SC_STDIO_SERVER)
+/// Default build mode: the Android JNI shared library, selected when neither test main is defined.
 #define SC_JNI_BUILD 1
 #endif
 
@@ -22,18 +25,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+/// JNI class the natives are registered on.
 #define CLS "org/npci/upi/security/pinactivitycomponent/OfflineNativeDefenderService"
 
+/// A keystore entry: one alias with its lazily-generated RSA and EC keypairs.
 typedef struct AliasKeys {
-    char *alias;
-    EVP_PKEY *rsa;
-    EVP_PKEY *ec;
-    struct AliasKeys *next;
+    char *alias;              ///< The key alias.
+    EVP_PKEY *rsa;            ///< RSA-2048 keypair (RSA-PSS signing).
+    EVP_PKEY *ec;             ///< P-256 keypair (ECDSA signing).
+    struct AliasKeys *next;   ///< Next entry in the singly-linked store.
 } AliasKeys;
 
-static AliasKeys *g_store = NULL;
-static pthread_mutex_t g_store_lock = PTHREAD_MUTEX_INITIALIZER;
+static AliasKeys *g_store = NULL;                                ///< Head of the in-memory alias store.
+static pthread_mutex_t g_store_lock = PTHREAD_MUTEX_INITIALIZER; ///< Guards g_store.
 
+/// Finds, or lazily creates, the RSA+EC keypairs for `alias` (thread-safe).
 static AliasKeys *store_get_or_create(const char *alias) {
     pthread_mutex_lock(&g_store_lock);
     for (AliasKeys *k = g_store; k; k = k->next) {
@@ -53,7 +59,7 @@ static AliasKeys *store_get_or_create(const char *alias) {
 }
 
 #ifdef SC_JNI_BUILD
-// GetStringUTFChars gives modified UTF-8, unlike Java's own getBytes(UTF_8); convert by hand instead.
+/// Converts a Java String to real UTF-8 bytes (JNI's GetStringUTFChars gives modified UTF-8).
 static uint8_t *utf16_to_utf8(JNIEnv *env, jstring s, size_t *out_len) {
     jsize n = (*env)->GetStringLength(env, s);
     const jchar *chars = (*env)->GetStringCritical(env, s, NULL);
@@ -92,6 +98,7 @@ static uint8_t *utf16_to_utf8(JNIEnv *env, jstring s, size_t *out_len) {
 #endif
 
 #if defined(SC_JNI_BUILD) || defined(SC_TEST_MAIN)
+/// Maps a base64 character to its 6-bit value, or -1 if not a base64 digit.
 static int b64_val(uint8_t c) {
     if (c >= 'A' && c <= 'Z') return c - 'A';
     if (c >= 'a' && c <= 'z') return c - 'a' + 26;
@@ -101,7 +108,7 @@ static int b64_val(uint8_t c) {
     return -1;
 }
 
-// android.util.Base64.decode(sigB64, NO_WRAP): standard alphabet, padding optional.
+/// Decodes base64 like android.util.Base64 NO_WRAP: standard alphabet, padding optional.
 static uint8_t *b64_decode(const char *in, size_t in_len, size_t *out_len) {
     uint8_t *out = malloc(in_len * 3 / 4 + 4);
     size_t o = 0;
@@ -129,7 +136,7 @@ static uint8_t *b64_decode(const char *in, size_t in_len, size_t *out_len) {
 }
 #endif
 
-// Java's "SHA512withRSA/PSS" (no JCA alias) is RSASSA-PSS with SHA-512/MGF1-SHA-512/saltLen=64.
+/// Signs with RSASSA-PSS/SHA-512 (MGF1-SHA-512, saltLen=digest) — the CL's "SHA512withRSA/PSS".
 static uint8_t *rsa_pss_sign(EVP_PKEY *key, const uint8_t *msg, size_t msg_len, size_t *sig_len) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     EVP_PKEY_CTX *pctx = NULL;
@@ -146,6 +153,7 @@ static uint8_t *rsa_pss_sign(EVP_PKEY *key, const uint8_t *msg, size_t msg_len, 
     return sig;
 }
 
+/// Signs with ECDSA-SHA256 (DER) — the CL's useEc path.
 static uint8_t *ecdsa_sign(EVP_PKEY *key, const uint8_t *msg, size_t msg_len, size_t *sig_len) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, key);
@@ -158,6 +166,7 @@ static uint8_t *ecdsa_sign(EVP_PKEY *key, const uint8_t *msg, size_t msg_len, si
     return sig;
 }
 
+/// Verifies an ECDSA-SHA256 signature over `msg`; returns 1 if valid, else 0.
 static int ecdsa_verify(EVP_PKEY *key, const uint8_t *msg, size_t msg_len,
                          const uint8_t *sig, size_t sig_len) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
@@ -169,6 +178,7 @@ static int ecdsa_verify(EVP_PKEY *key, const uint8_t *msg, size_t msg_len,
 
 #ifdef SC_JNI_BUILD
 
+/// JNI nOfflineSignWithKey: signs `jdata` under `jalias` (RSA-PSS, or ECDSA when `useEc`).
 static jbyteArray JNICALL native_sign(JNIEnv *env, jclass clazz, jstring jdata, jstring jalias, jboolean useEc) {
     (void)clazz;
     size_t data_len;
@@ -188,6 +198,7 @@ static jbyteArray JNICALL native_sign(JNIEnv *env, jclass clazz, jstring jdata, 
     return out;
 }
 
+/// JNI nOfflineVerifyEcSignature: verifies an ECDSA-SHA256 signature of `jdata` under `pubKeyObj`.
 static jboolean JNICALL native_verify(JNIEnv *env, jclass clazz, jstring jdata, jstring jsigB64, jobject pubKeyObj) {
     (void)clazz;
     size_t data_len;
@@ -219,6 +230,7 @@ static jboolean JNICALL native_verify(JNIEnv *env, jclass clazz, jstring jdata, 
 }
 
 #ifdef SC_TEST_HOOKS
+/// Test-only hook (SC_TEST_HOOKS): exposes the UTF-8 conversion; not part of the real .so.
 static jbyteArray JNICALL test_utf8(JNIEnv *env, jclass clazz, jstring jdata) {
     (void)clazz;
     size_t n;
@@ -229,6 +241,7 @@ static jbyteArray JNICALL test_utf8(JNIEnv *env, jclass clazz, jstring jdata) {
     return out;
 }
 
+/// Test-only hook (SC_TEST_HOOKS): returns an alias's public key DER; not part of the real .so.
 static jbyteArray JNICALL test_pubkey_der(JNIEnv *env, jclass clazz, jstring jalias, jstring jalgo) {
     (void)clazz;
     const char *alias = (*env)->GetStringUTFChars(env, jalias, NULL);
@@ -247,6 +260,7 @@ static jbyteArray JNICALL test_pubkey_der(JNIEnv *env, jclass clazz, jstring jal
 }
 #endif
 
+/// JNI nEnableUPILITEX: second-stage registration of the two signing natives.
 static void JNICALL native_enable(JNIEnv *env, jclass clazz) {
     JNINativeMethod methods[] = {
         {"nOfflineSignWithKey", "(Ljava/lang/String;Ljava/lang/String;Z)[B", (void *)native_sign},
@@ -259,6 +273,7 @@ static void JNICALL native_enable(JNIEnv *env, jclass clazz) {
     (*env)->RegisterNatives(env, clazz, methods, sizeof(methods) / sizeof(methods[0]));
 }
 
+/// JNI entry point: registers nEnableUPILITEX, matching the genuine .so's two-stage registration.
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     (void)reserved;
     JNIEnv *env;
@@ -273,6 +288,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 
 #elif defined(SC_TEST_MAIN) // exercise the crypto core directly, no JVM required.
 
+/// Standalone self-test of the crypto core, no JVM (SC_TEST_MAIN build).
 int main(void) {
     const char *msg = "5241234567890123|100.00|20260803";
     size_t msg_len = strlen(msg);
@@ -308,6 +324,7 @@ int main(void) {
 
 #else // SC_STDIO_SERVER -- hex-line protocol over stdin/stdout, no JNI/JVM.
 
+/// Maps a hex character to its nibble value, or -1.
 static int hexval(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -315,6 +332,7 @@ static int hexval(char c) {
     return -1;
 }
 
+/// Decodes a hex string into freshly allocated bytes.
 static uint8_t *hex_decode(const char *in, size_t *out_len) {
     size_t n = strlen(in) / 2;
     uint8_t *out = malloc(n ? n : 1);
@@ -325,6 +343,7 @@ static uint8_t *hex_decode(const char *in, size_t *out_len) {
     return out;
 }
 
+/// Writes an `OK <hex>` response line to stdout for the stdio server.
 static void print_ok_hex(const uint8_t *data, size_t len) {
     static const char digits[] = "0123456789abcdef";
     char *line = malloc(len * 2 + 4);
@@ -339,7 +358,7 @@ static void print_ok_hex(const uint8_t *data, size_t len) {
     free(line);
 }
 
-// Hex-decodes into a nul-terminated C string, truncating to fit rather than overflowing.
+/// Hex-decodes into a NUL-terminated C string, truncating to fit rather than overflowing.
 static void hex_decode_cstr(const char *in, char *out, size_t out_cap) {
     size_t n;
     uint8_t *raw = hex_decode(in, &n);
@@ -349,7 +368,7 @@ static void hex_decode_cstr(const char *in, char *out, size_t out_cap) {
     free(raw);
 }
 
-// strtok_r drops empty fields between delimiters; split on each space instead so "" survives.
+/// Splits a request line on single spaces, keeping empty fields (unlike strtok_r).
 static void split_line(char *line, char *tokens[4]) {
     for (int i = 0; i < 4; i++) tokens[i] = NULL;
     int n = 0;
@@ -364,6 +383,7 @@ static void split_line(char *line, char *tokens[4]) {
     }
 }
 
+/// stdio coprocess server (SC_STDIO_SERVER build); hex line protocol per HACKING.md.
 int main(void) {
     puts("READY secure_component.c sign,verify,pubkey");
     fflush(stdout);
