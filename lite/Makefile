@@ -1,12 +1,13 @@
 CC ?= cc
 CFLAGS ?= -std=c23 -O1 -g -Wall -Wextra -Wpedantic -Werror
 SAN := -fsanitize=address,undefined -fno-omit-frame-pointer
-INC := -Iinclude
+INC := -Iinclude -Ithird_party/parson
 OSSL := $(shell pkg-config --cflags --libs openssl)
 
 SRC := src/codec.c src/json.c src/alias.c src/vault.c src/riskrules.c src/wallet.c src/litex.c
 BACKENDS := backends/openssl/crypto_openssl.c backends/mem/keystore_mem.c backends/mem/store_mem.c backends/mem/env_mem.c
-LIBSRC := $(SRC) $(BACKENDS)
+VENDOR := third_party/parson/parson.c
+LIBSRC := $(SRC) $(BACKENDS) $(VENDOR)
 
 TESTS := test_codec test_alias test_vault test_wallet test_litex test_litex_flow test_vectors
 TESTBIN := $(addprefix build/,$(TESTS))
