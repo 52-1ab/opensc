@@ -1,0 +1,78 @@
+name: lite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  c-tests:
+    name: c-tests (ASan/UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+
+      # parson is a public submodule and the C build needs it; artifacts stays untouched.
+      - name: Fetch parson
+        run: git submodule update --init lite/third_party/parson
+
+      - name: Install OpenSSL headers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config
+
+      - name: Test
+        run: make -C lite test
+
+  python-tests:
+    name: python-tests (3.15)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Test
+        run: make -C lite python-test
+
+  jqwik:
+    name: jqwik (C server vs JDK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Fetch parson
+        run: git submodule update --init lite/third_party/parson
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Install OpenSSL headers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config
+
+      - name: Build the lite stdio server
+        run: make -C lite server
+
+      - name: Property-test it against the JDK
+        run: mvn --batch-mode -Dtest=LiteServerPropertyTest test
