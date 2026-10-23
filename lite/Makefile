@@ -43,7 +43,7 @@ waydroid-gen: oracle/waydroid/gen_waydroid_states.c test/npci_test_ca.c $(LIBSRC
 
 .PHONY: python-test
 python-test:
-	cd python && for t in test_vectors test_wallet test_litex; do \
+	cd ../python && for t in test_vectors test_wallet test_litex test_secure_component; do \
 	  uv run --python 3.15 --with cryptography python $$t.py || exit 1; done
 
 .PHONY: clean

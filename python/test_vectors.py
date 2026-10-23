@@ -5,7 +5,7 @@ import pathlib
 
 import opensc_lite as o
 
-VECTORS = pathlib.Path(__file__).resolve().parent.parent / "vectors" / "vectors.json"
+VECTORS = pathlib.Path(__file__).resolve().parent.parent / "lite" / "vectors" / "vectors.json"
 
 _DISPATCH = {
     "alias": lambda a: o.alias(*a),

@@ -1,6 +1,8 @@
 target/
 *.class
 .jqwik-database
+__pycache__/
+*.pyc
 /build/
 lite/build/
 lite/oracle/.jars/
