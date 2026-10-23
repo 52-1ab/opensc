@@ -94,17 +94,18 @@ litex_assert_identity(&me, &my_id, their_challenge, my_doc, sizeof my_doc);   //
 litex_verify_identity(&me, their_doc, my_challenge);
 ```
 
-Then run the transfer. Each device sends the message it produces to the other.
+Then run the transfer. Both devices use the same agreed transfer `x` (amount,
+parties, timestamp). Each device sends the message it produces to the other.
 
 The payer runs:
 
-5. Call `litex_start_debit()`.
+5. Call `litex_start_debit(x)`.
 6. Call `litex_request_value(their_reqs)`. Send the TRAS it returns.
 7. Call `litex_acknowledge_value(their_reqs, tras, their_acks)`.
 
 The payee runs:
 
-5. Call `litex_start_credit()`. Send the REQS it returns.
+5. Call `litex_start_credit(x)`. Send the REQS it returns.
 6. Call `litex_transfer_value(my_reqs, their_tras)`. Send the ACKS it returns.
 
 ```c
@@ -172,3 +173,63 @@ sc.verify("5241234567890123|100.00|20260803", base64.b64encode(sig).decode(), pu
 Pass `use_ec=True` to sign with ECDSA-SHA256, or `use_ec=False` for RSA-PSS-SHA512.
 `sign()` creates the alias key the first time you use it. `verify()` checks
 ECDSA-SHA256 signatures only.
+
+### Sign a PIN credential block (OTP or Debit Card)
+
+Setting or changing a UPI PIN produces a credential block that the device signs with
+its EC key. The verification method decides which credentials the block carries:
+
+- OTP: an OTP (`type OTP`, `subtype SMS`) and the new PIN (`type PIN`, `subtype NMPIN`).
+- Debit Card: the ATM PIN (`type PIN`, `subtype ATMPIN`) and an OTP, plus the new PIN
+  (`subtype NMPIN`).
+
+The signing step is identical for both; only the captured credentials differ. Sign the
+block with the EC key, then attach the signature and the public key:
+
+1. Build the credential block for the chosen method.
+2. Sign it with `sign(block, alias, use_ec=True)`.
+3. Put the base64 signature in `signatureValue` and `public_key_der(alias, "EC")` in `keyValue`.
+
+```python
+import base64, json, time
+from secure_component import SecureComponent
+
+sc = SecureComponent()
+ALIAS = "NPCI_CL"
+
+def sign_credential(cred_type, cred_blocks):
+    block = json.dumps({"version": "1.0", "credType": cred_type,
+                        "credBlocks": cred_blocks}, separators=(",", ":"))
+    sig = sc.sign(block, ALIAS, use_ec=True)             # SHA256withECDSA
+    pub = sc.public_key_der(ALIAS, "EC")                 # ECwithSPEC256r1
+    return {
+        "version": "1.0",
+        "credType": cred_type,
+        "credBlocks": cred_blocks,
+        "trust": {
+            "owner": "DEVICE-OS",
+            "keyType": "ECwithSPEC256r1",
+            "keyValue": base64.b64encode(pub).decode(),
+            "signatureType": "SHA256withECDSA",
+            "signatureValue": base64.b64encode(sig).decode(),
+            "timestamp": str(int(time.time() * 1000)),
+        },
+    }
+
+# OTP flow: an OTP plus the new PIN.
+otp_doc = sign_credential("OTP|NMPIN", [
+    {"type": "OTP", "subtype": "SMS"},
+    {"type": "PIN", "subtype": "NMPIN"},
+])
+
+# Debit Card flow: the ATM PIN and an OTP, plus the new PIN.
+card_doc = sign_credential("ATMPIN|OTP|NMPIN", [
+    {"type": "PIN", "subtype": "ATMPIN"},
+    {"type": "OTP", "subtype": "SMS"},
+    {"type": "PIN", "subtype": "NMPIN"},
+])
+```
+
+The captured values go inside `credBlocks` as an encrypted PID block with an HMAC.
+Building that block is a separate step; the signing engine produces only the
+`signatureValue` and the `keyValue`.
