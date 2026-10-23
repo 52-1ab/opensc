@@ -37,6 +37,9 @@ oracle-tools: tools/gen_oracle_crosscheck.c tools/check_cl_vault.c tools/gen_syn
 	$(CC) $(CFLAGS) $(INC) tools/check_cl_vault.c $(LIBSRC) $(OSSL) -o build/check_cl_vault
 	$(CC) $(CFLAGS) $(INC) -Itest tools/gen_sync_cases.c test/npci_test_ca.c $(LIBSRC) $(OSSL) -o build/gen_sync_cases
 
+waydroid-gen: oracle/waydroid/gen_waydroid_states.c test/npci_test_ca.c $(LIBSRC) | build
+	$(CC) $(CFLAGS) $(INC) -Itest oracle/waydroid/gen_waydroid_states.c test/npci_test_ca.c $(LIBSRC) $(OSSL) -o build/gen_waydroid_states
+
 .PHONY: clean
 clean:
 	rm -rf build
