@@ -6,12 +6,13 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LITE="$(dirname "$HERE")"
-CL_JAR="${CL_JAR:-${1:-}}"
+# Default to the CL-only jar in the artifacts submodule (org/npci/** only, no app code).
+CL_JAR="${CL_JAR:-${1:-$LITE/../artifacts/cl/npci-cl.jar}}"
 : "${JAVA_HOME:=/usr/lib/jvm/java-17-openjdk}"
 export PATH="$JAVA_HOME/bin:$PATH"
 
-if [[ -z "$CL_JAR" || ! -f "$CL_JAR" ]]; then
-    echo "set CL_JAR to the dex2jar'd NPCI CL jar (see oracle notes)" >&2
+if [[ ! -f "$CL_JAR" ]]; then
+    echo "CL jar not found ($CL_JAR); init the artifacts submodule or set CL_JAR" >&2
     exit 2
 fi
 
